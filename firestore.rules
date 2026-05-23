@@ -1,0 +1,114 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isAdmin() { 
+      return isSignedIn() && (
+        request.auth.token.email == 'mraaziqp@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // --- Project Validation ---
+    function isValidProject(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.description is string && data.description.size() <= 1000 &&
+             data.ownerId == request.auth.uid &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    match /projects/{projectId} {
+      allow get: if isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      
+      allow create: if isSignedIn() && isValidId(projectId) && 
+                      isValidProject(incoming()) && 
+                      incoming().createdAt == request.time &&
+                      incoming().updatedAt == request.time;
+                      
+      allow update: if isSignedIn() && isValidId(projectId) && 
+                      isValidProject(incoming()) &&
+                      incoming().ownerId == existing().ownerId &&
+                      incoming().createdAt == existing().createdAt &&
+                      incoming().updatedAt == request.time &&
+                      (
+                        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'updatedAt'])
+                      );
+                      
+      allow delete: if isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+
+      // --- Nested Collections ---
+      
+      match /pages/{pageId} {
+        function isValidPage(data) {
+          return data.projectId == projectId &&
+                 data.pageNumber is int &&
+                 data.type in ['cover', 'spread'] &&
+                 data.canvasData is map;
+        }
+
+        // Relational Sync: Check parent project ownership
+        function isProjectOwner() {
+          return get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid || isAdmin();
+        }
+
+        allow read: if isSignedIn() && isProjectOwner();
+        
+        allow create: if isSignedIn() && isValidId(pageId) && 
+                        isValidPage(incoming()) && 
+                        isProjectOwner();
+                        
+        allow update: if isSignedIn() && isValidId(pageId) && 
+                        isValidPage(incoming()) && 
+                        isProjectOwner() &&
+                        (
+                          incoming().diff(existing()).affectedKeys().hasOnly(['canvasData', 'pageNumber', 'type'])
+                        );
+                        
+        allow delete: if isSignedIn() && isProjectOwner();
+      }
+
+      match /assets/{assetId} {
+        function isValidAsset(data) {
+          return data.projectId == projectId &&
+                 data.url is string && data.url.size() <= 2000;
+        }
+
+        allow read: if isSignedIn() && isProjectOwner();
+        
+        allow create: if isSignedIn() && isValidId(assetId) &&
+                        isValidAsset(incoming()) &&
+                        isProjectOwner();
+                        
+        allow delete: if isSignedIn() && isProjectOwner();
+      }
+
+      match /templates/{templateId} {
+        function isValidTemplate(data) {
+          return data.projectId == projectId &&
+                 data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+                 data.objects is list;
+        }
+
+        allow read: if isSignedIn() && isProjectOwner();
+        
+        allow create, update: if isSignedIn() && isValidId(templateId) &&
+                                isValidTemplate(incoming()) &&
+                                isProjectOwner();
+                                
+        allow delete: if isSignedIn() && isProjectOwner();
+      }
+    }
+  }
+}

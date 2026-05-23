@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Studio Project",
+      "description": "A photo book project containing pages and assets.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The title of the photo book." },
+        "description": { "type": "string", "description": "A brief summary of the book's content." },
+        "ownerId": { "type": "string", "description": "The UID of the user who owns the project." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ownerId", "createdAt", "updatedAt"]
+    },
+    "Page": {
+      "title": "Book Page",
+      "description": "A single spread or cover in the photo book.",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "pageNumber": { "type": "integer" },
+        "type": { "type": "string", "enum": ["cover", "spread"] },
+        "canvasData": { "type": "object", "description": "Serialized Fabric.js canvas state." }
+      },
+      "required": ["projectId", "pageNumber", "type", "canvasData"]
+    },
+    "Asset": {
+      "title": "Project Asset",
+      "description": "A photo or media asset uploaded to the project.",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "metadata": { "type": "object" }
+      },
+      "required": ["projectId", "url"]
+    }
+  },
+  "firestore": {
+    "projects": {
+      "schema": "Project",
+      "description": "Collection of photo book projects."
+    },
+    "projects/{projectId}/pages": {
+      "schema": "Page",
+      "description": "Pages within a specific project."
+    },
+    "projects/{projectId}/assets": {
+      "schema": "Asset",
+      "description": "Assets uploaded for a specific project."
+    }
+  }
+}
