@@ -22,7 +22,14 @@ const config = {
 };
 
 const app = initializeApp(config);
-export const db = getFirestore(app, config.firestoreDatabaseId);
+const dbId = (config.firestoreDatabaseId && 
+              config.firestoreDatabaseId !== 'ai-studio-380b314f-b246-4bad-bb8d-fd7ee3fba5e8' && 
+              !config.firestoreDatabaseId.startsWith('G-') &&
+              config.firestoreDatabaseId.trim() !== '') 
+              ? config.firestoreDatabaseId 
+              : undefined;
+
+export const db = dbId ? getFirestore(app, dbId) : getFirestore(app);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export { ref, uploadBytesResumable, getDownloadURL };

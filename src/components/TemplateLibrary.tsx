@@ -18,7 +18,8 @@ const CATEGORIES = [
   { id: 'cinematic', name: 'Cinematic' },
   { id: 'editorial', name: 'Editorial' },
   { id: 'minimalist', name: 'Minimalist' },
-  { id: 'brutalist', name: 'Brutalist' }
+  { id: 'brutalist', name: 'Brutalist' },
+  { id: 'custom', name: 'Custom Styles ✨' }
 ];
 
 const TEMPLATES: Record<string, Template[]> = {
