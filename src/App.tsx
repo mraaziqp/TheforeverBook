@@ -273,8 +273,10 @@ function AppContent() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
       setProjects(data);
+      setDbError(null);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'projects');
+      console.error('Projects fetch failed:', error);
+      setDbError(error instanceof Error ? error.message : String(error));
     });
 
     return () => unsubscribe();
@@ -288,7 +290,7 @@ function AppContent() {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setProjectAssets(data);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `projects/${projectId}/assets`);
+      console.error('Assets fetch failed:', error);
     });
   };
 
@@ -329,19 +331,40 @@ function AppContent() {
 
   const openProject = async (project: Project) => {
     setCurrentProject(project);
+    setCurrentPageIndex(0);
+    setActiveTab('canvas');
+    setEditMode('internal');
     fetchAssets(project.id);
     
-    const q = query(collection(db, `projects/${project.id}/pages`), orderBy('pageNumber', 'asc'));
-    onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Page));
-      setPages(data);
-      if (activeTab !== 'canvas') {
-        setCurrentPageIndex(0);
-        setActiveTab('canvas');
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `projects/${project.id}/pages`);
-    });
+    try {
+      const q = query(collection(db, `projects/${project.id}/pages`), orderBy('pageNumber', 'asc'));
+      onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Page));
+        setPages(data);
+        setDbError(null);
+      }, (error) => {
+        console.error('Pages fetch error:', error);
+        setDbError(error instanceof Error ? error.message : String(error));
+        // Create a temporary empty page so the canvas still renders
+        setPages([{
+          id: 'temp-page',
+          projectId: project.id,
+          pageNumber: 1,
+          type: 'spread',
+          canvasData: { version: '6.0.0', objects: [] }
+        }]);
+      });
+    } catch (error) {
+      console.error('Open project error:', error);
+      setDbError(error instanceof Error ? error.message : String(error));
+      setPages([{
+        id: 'temp-page',
+        projectId: project.id,
+        pageNumber: 1,
+        type: 'spread',
+        canvasData: { version: '6.0.0', objects: [] }
+      }]);
+    }
   };
 
   const renameProject = async (newName: string) => {
@@ -820,9 +843,9 @@ function AppContent() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   {[
-                    { title: "The Minimalist", desc: "Swiss-inspired layouts with generous negative space.", color: "from-zinc-200 to-zinc-400" },
-                    { title: "Cinematic Editorial", desc: "Bold, full-bleed imagery with premium typography.", color: "from-indigo-400 to-purple-500" },
-                    { title: "Classic Vintage", desc: "Warm tones and sophisticated antique framing.", color: "from-amber-200 to-orange-400" }
+                    { title: "The Minimalist", desc: "Swiss-inspired layouts with generous negative space.", color: "from-zinc-200 to-zinc-400", category: 'minimalist' },
+                    { title: "Cinematic Editorial", desc: "Bold, full-bleed imagery with premium typography.", color: "from-indigo-400 to-purple-500", category: 'cinematic' },
+                    { title: "Classic Vintage", desc: "Warm tones and sophisticated antique framing.", color: "from-amber-200 to-orange-400", category: 'editorial' }
                   ].map((tpl, i) => (
                     <motion.div 
                       key={tpl.title}
@@ -839,7 +862,17 @@ function AppContent() {
                       <div className="px-6 pb-6 pt-2">
                         <h3 className="text-xl font-medium text-white mb-2">{tpl.title}</h3>
                         <p className="text-sm text-zinc-500 mb-6">{tpl.desc}</p>
-                        <button className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-300 group-hover:text-white transition-all">Use Template</button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!user) {
+                              alert('Please sign in first to create a book.');
+                              return;
+                            }
+                            createProject();
+                          }}
+                          className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-300 group-hover:text-white transition-all cursor-pointer"
+                        >Use Template</button>
                       </div>
                     </motion.div>
                   ))}
@@ -1024,7 +1057,17 @@ function AppContent() {
                     <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-widest animate-pulse">Initialising Creative Engine...</p>
                   </div>
                 }>
-                  <div className="flex-1 flex">
+                  <div className="flex-1 flex flex-col">
+                    {dbError && (
+                      <div className="bg-red-500/10 border-b border-red-500/20 px-6 py-3 flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                          <span className="text-red-300 text-xs font-medium">Database connection issue — changes may not save. Check your Firebase project configuration.</span>
+                        </div>
+                        <button onClick={() => setDbError(null)} className="text-red-400 hover:text-white text-xs px-3 py-1 rounded-full bg-red-500/10 hover:bg-red-500/20 transition-all">Dismiss</button>
+                      </div>
+                    )}
+                    <div className="flex-1 flex">
                     {/* Left Tools - Template Library */}
                     <aside className="w-80 glass-dark border-r border-white/5 p-8 overflow-y-auto no-scrollbar hidden xl:flex flex-col">
                       <TemplateLibrary 
@@ -1163,6 +1206,7 @@ function AppContent() {
                          </div>
                       </div>
                     </div>
+                  </div>
                   </div>
                 </Suspense>
               )}

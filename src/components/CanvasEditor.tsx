@@ -487,6 +487,40 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ projectId, pageId, type = '
     };
   }, [projectId, pageId, type, SPREAD_WIDTH, PAGE_HEIGHT, handleUpdate, persistToDatabase, onStateChange]);
 
+  // Handle responsive scaling
+  const [scale, setScale] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (!containerRef.current) return;
+      const padding = 64;
+      const availableWidth = containerRef.current.clientWidth - padding;
+      const targetWidth = SPREAD_WIDTH;
+      if (availableWidth < targetWidth) {
+        setScale(availableWidth / targetWidth);
+      } else {
+        setScale(1);
+      }
+    };
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, [SPREAD_WIDTH]);
+
+  // Handle guide visibility
+  useEffect(() => {
+    if (fabricCanvas.current) {
+      const c = fabricCanvas.current;
+      c.getObjects().forEach(obj => {
+        if ((obj as any).isGuide && (obj.stroke !== 'rgba(0,0,0,0.1)')) {
+          obj.set('visible', showGuides);
+        }
+      });
+      c.renderAll();
+    }
+  }, [showGuides]);
+
   const addText = () => {
     const text = new IText('Chapter One', {
       left: 100,
