@@ -173,9 +173,9 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ projectId, pageId, type = '
       const files = e.dataTransfer?.files;
       const imageUrl = e.dataTransfer?.getData('imagePath');
       
-      if (files && files.length > 0 && fabricCanvas.current) {
-        const pointer = fabricCanvas.current.getScenePoint(e);
-        const targetResult = fabricCanvas.current.findTarget(e);
+      if (files && files.length > 0) {
+        const pointer = canvas.getScenePoint(e);
+        const targetResult = canvas.findTarget(e);
         const target = (targetResult as any)?.target || targetResult;
         
         // Render a stylish premium text loader on the canvas
@@ -189,8 +189,8 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ projectId, pageId, type = '
           selectable: false,
           evented: false
         });
-        fabricCanvas.current.add(loadingText);
-        fabricCanvas.current.renderAll();
+        canvas.add(loadingText);
+        canvas.renderAll();
 
         try {
           const file = files[0];
@@ -205,7 +205,7 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ projectId, pageId, type = '
           });
 
           FabricImage.fromURL(downloadUrl, { crossOrigin: 'anonymous' }).then((img) => {
-            fabricCanvas.current?.remove(loadingText);
+            canvas.remove(loadingText);
             if (target && (target as any).isPlaceholder) {
               img.set({
                 left: target.left,
@@ -213,21 +213,21 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ projectId, pageId, type = '
                 scaleX: (target.width! * target.scaleX!) / img.width!,
                 scaleY: (target.height! * target.scaleY!) / img.height!,
               });
-              fabricCanvas.current?.remove(target);
-              fabricCanvas.current?.add(img);
-              fabricCanvas.current?.setActiveObject(img);
+              canvas.remove(target);
+              canvas.add(img);
+              canvas.setActiveObject(img);
             } else {
               img.scaleToWidth(300);
               img.left = pointer.x - 150;
               img.top = pointer.y - 100;
-              fabricCanvas.current?.add(img);
-              fabricCanvas.current?.setActiveObject(img);
+              canvas.add(img);
+              canvas.setActiveObject(img);
             }
             handleUpdate();
           });
         } catch (err) {
           console.error("Canvas drop upload failed:", err);
-          fabricCanvas.current?.remove(loadingText);
+          canvas.remove(loadingText);
           const errorText = new IText('Upload failed ❌', {
             left: pointer.x - 50,
             top: pointer.y - 10,
@@ -238,16 +238,16 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ projectId, pageId, type = '
             selectable: false,
             evented: false
           });
-          fabricCanvas.current.add(errorText);
-          fabricCanvas.current.renderAll();
+          canvas.add(errorText);
+          canvas.renderAll();
           setTimeout(() => {
-            fabricCanvas.current?.remove(errorText);
-            fabricCanvas.current?.renderAll();
+            canvas.remove(errorText);
+            canvas.renderAll();
           }, 3000);
         }
-      } else if (imageUrl && fabricCanvas.current) {
-        const pointer = fabricCanvas.current.getScenePoint(e);
-        const targetResult = fabricCanvas.current.findTarget(e);
+      } else if (imageUrl) {
+        const pointer = canvas.getScenePoint(e);
+        const targetResult = canvas.findTarget(e);
         const target = (targetResult as any)?.target || targetResult;
         
         if (target && (target as any).isPlaceholder) {
@@ -258,9 +258,9 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ projectId, pageId, type = '
               scaleX: (target.width! * target.scaleX!) / img.width!,
               scaleY: (target.height! * target.scaleY!) / img.height!,
             });
-            fabricCanvas.current?.remove(target);
-            fabricCanvas.current?.add(img);
-            fabricCanvas.current?.setActiveObject(img);
+            canvas.remove(target);
+            canvas.add(img);
+            canvas.setActiveObject(img);
             handleUpdate();
           });
         } else {
@@ -268,8 +268,8 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ projectId, pageId, type = '
             img.scaleToWidth(200);
             img.left = pointer.x;
             img.top = pointer.y;
-            fabricCanvas.current?.add(img);
-            fabricCanvas.current?.setActiveObject(img);
+            canvas.add(img);
+            canvas.setActiveObject(img);
             handleUpdate();
           });
         }
@@ -285,16 +285,16 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ projectId, pageId, type = '
         let dataToLoad = initialData;
         
         if (typeof initialData === 'string') {
-           if (initialData.includes('[object Object]')) {
-             dataToLoad = { version: "6.0.0", objects: [] };
-           } else {
-             try {
-               dataToLoad = JSON.parse(initialData);
-             } catch (e) {
-               console.error("Failed to parse initialData string:", e);
-               dataToLoad = { version: "6.0.0", objects: [] };
-             }
-           }
+            if (initialData.includes('[object Object]')) {
+              dataToLoad = { version: "6.0.0", objects: [] };
+            } else {
+              try {
+                dataToLoad = JSON.parse(initialData);
+              } catch (e) {
+                console.error("Failed to parse initialData string:", e);
+                dataToLoad = { version: "6.0.0", objects: [] };
+              }
+            }
         }
 
         canvas.loadFromJSON(dataToLoad).then(() => {
@@ -398,90 +398,45 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ projectId, pageId, type = '
       console.error("Firestore sync error", error);
     });
 
-    canvas.on('object:modified', handleUpdate);
-    canvas.on('object:added', handleUpdate);
-    canvas.on('object:removed', handleUpdate);
-
-    return () => {
-      canvasElement.removeEventListener('drop', handleDrop);
-      canvas.dispose();
-      unsubscribe();
-      if (saveTimeout.current) clearTimeout(saveTimeout.current);
-    };
-  }, [projectId, pageId, type]);
-
-  // Handle responsive scaling
-  const [scale, setScale] = useState(1);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const updateScale = () => {
-      if (!containerRef.current) return;
-      const padding = 64; // 16px * 4
-      const availableWidth = containerRef.current.clientWidth - padding;
-      const targetWidth = SPREAD_WIDTH;
-      if (availableWidth < targetWidth) {
-        setScale(availableWidth / targetWidth);
-      } else {
-        setScale(1);
-      }
-    };
-
-    updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, [SPREAD_WIDTH]);
-
-  // Handle guide visibility separately to avoid full re-init if possible
-  useEffect(() => {
-    if (fabricCanvas.current) {
-        const c = fabricCanvas.current;
-        c.getObjects().forEach(obj => {
-            if ((obj as any).isGuide && (obj.stroke !== 'rgba(0,0,0,0.1)')) {
-                obj.set('visible', showGuides);
-            }
-        });
-        c.renderAll();
-    }
-  }, [showGuides]);
-
-  // Template and Gallery Events
-  useEffect(() => {
+    // Template and Gallery Events bound directly to the active canvas instance
     const handleTemplateApply = (e: any) => {
-        if (!fabricCanvas.current) return;
         const layout = e.detail;
-        fabricCanvas.current.getObjects().forEach(obj => {
-            if (!(obj as any).isGuide) fabricCanvas.current?.remove(obj);
+        canvas.getObjects().forEach(obj => {
+            if (!(obj as any).isGuide) canvas.remove(obj);
         });
         layout.objects.forEach((objData: any) => {
             let fabricObj;
             if (objData.type === 'rect') fabricObj = new Rect(objData);
             else if (objData.type === 'i-text') fabricObj = new IText(objData.text, objData);
-            if (fabricObj) fabricCanvas.current?.add(fabricObj);
+            if (fabricObj) canvas.add(fabricObj);
         });
-        fabricCanvas.current.renderAll();
-        const json = fabricCanvas.current.toObject(['isPlaceholder', 'isGuide']);
+        canvas.renderAll();
+        
+        // Propagate state change & save immediately
+        const json = canvas.toObject(['isPlaceholder', 'isGuide']);
         onStateChange?.(json);
         persistToDatabase(json);
     };
 
     const handleGalleryInsert = (e: any) => {
-      if (!fabricCanvas.current) return;
       const urls = e.detail;
       urls.forEach((url: string, index: number) => {
         FabricImage.fromURL(url, { crossOrigin: 'anonymous' }).then((img) => {
           img.scaleToWidth(250);
           img.left = 120 + (index * 60);
           img.top = 100 + (index * 40);
-          fabricCanvas.current?.add(img);
-          fabricCanvas.current?.setActiveObject(img);
-          handleUpdate();
+          canvas.add(img);
+          canvas.setActiveObject(img);
+          
+          // Force active state update immediately
+          const json = canvas.toObject(['isPlaceholder', 'isGuide']);
+          onStateChange?.(json);
+          persistToDatabase(json);
         });
       });
     };
 
     const handleBgSet = (e: any) => {
-      if (!fabricCanvas.current) return;
       const url = e.detail;
       FabricImage.fromURL(url, { crossOrigin: 'anonymous' }).then((img) => {
         // Scale to fully cover double spread sheet
@@ -496,32 +451,41 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ projectId, pageId, type = '
         (img as any).isBg = true;
         
         // Remove existing background image if any
-        fabricCanvas.current?.getObjects().forEach(obj => {
-          if ((obj as any).isBg) fabricCanvas.current?.remove(obj);
+        canvas.getObjects().forEach(obj => {
+          if ((obj as any).isBg) canvas.remove(obj);
         });
 
-        fabricCanvas.current?.add(img);
-        fabricCanvas.current?.sendObjectToBack(img);
+        canvas.add(img);
+        canvas.sendObjectToBack(img);
         
         // Keep guide lines on top
-        fabricCanvas.current?.getObjects().forEach(obj => {
-          if ((obj as any).isGuide) fabricCanvas.current?.bringObjectToFront(obj);
+        canvas.getObjects().forEach(obj => {
+          if ((obj as any).isGuide) canvas.bringObjectToFront(obj);
         });
 
-        fabricCanvas.current?.renderAll();
-        handleUpdate();
+        canvas.renderAll();
+        
+        // Force active state update immediately
+        const json = canvas.toObject(['isPlaceholder', 'isGuide']);
+        onStateChange?.(json);
+        persistToDatabase(json);
       });
     };
 
     window.addEventListener('apply-template', handleTemplateApply);
     window.addEventListener('insert-gallery-images', handleGalleryInsert);
     window.addEventListener('set-spread-background-image', handleBgSet);
+
     return () => {
+      canvasElement.removeEventListener('drop', handleDrop);
       window.removeEventListener('apply-template', handleTemplateApply);
       window.removeEventListener('insert-gallery-images', handleGalleryInsert);
       window.removeEventListener('set-spread-background-image', handleBgSet);
+      canvas.dispose();
+      unsubscribe();
+      if (saveTimeout.current) clearTimeout(saveTimeout.current);
     };
-  }, [projectId, pageId, SPREAD_WIDTH, PAGE_HEIGHT]);
+  }, [projectId, pageId, type, SPREAD_WIDTH, PAGE_HEIGHT, handleUpdate, persistToDatabase, onStateChange]);
 
   const addText = () => {
     const text = new IText('Chapter One', {
