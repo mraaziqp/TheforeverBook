@@ -301,7 +301,7 @@ function AppContent() {
     }
     const name = prompt("Enter project name:");
     if (!name) return;
-    
+
     try {
       const projectData = {
         name,
@@ -310,9 +310,9 @@ function AppContent() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
-      
+
       const docRef = await addDoc(collection(db, 'projects'), projectData);
-      
+
       // Create first page
       const firstPage = {
         projectId: docRef.id,
@@ -320,12 +320,20 @@ function AppContent() {
         type: 'spread',
         canvasData: { version: "6.0.0", objects: [] }
       };
-      
+
       await addDoc(collection(db, `projects/${docRef.id}/pages`), firstPage);
-      
+
       openProject({ id: docRef.id, ...projectData } as Project);
     } catch (e) {
-      handleFirestoreError(e, OperationType.CREATE, 'projects');
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      console.error("Project creation error:", errorMsg);
+
+      if (errorMsg.includes("not found") || errorMsg.includes("PERMISSION_DENIED") || errorMsg.includes("Database")) {
+        setFirebaseError("Database not configured. Please set up Firebase Firestore in your Firebase console.");
+      } else {
+        setFirebaseError(errorMsg);
+      }
+      alert(`Error creating project: ${errorMsg}`);
     }
   };
 
@@ -456,6 +464,7 @@ function AppContent() {
   };
 
   const [editMode, setEditMode] = useState<'internal' | 'cover'>('internal');
+  const [firebaseError, setFirebaseError] = useState<string | null>(null);
 
   const filteredPages = pages.filter(p => editMode === 'cover' ? p.type === 'cover' : p.type === 'spread');
   const activePage = filteredPages[currentPageIndex] || filteredPages[0];
@@ -653,7 +662,16 @@ function AppContent() {
 
       openProject({ id: docRef.id, ...projectData } as Project);
     } catch (e) {
-      handleFirestoreError(e, OperationType.CREATE, 'projects');
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      console.error("Template creation error:", errorMsg);
+
+      if (errorMsg.includes("not found") || errorMsg.includes("PERMISSION_DENIED") || errorMsg.includes("Database")) {
+        setFirebaseError("Database not configured. Please set up Firebase Firestore in your Firebase console.");
+        alert("⚠️ Database Connection Issue\n\nPlease ensure:\n1. Firebase project is configured\n2. Firestore database is created\n3. Authentication is enabled\n\nContact your admin or check Firebase console.");
+      } else {
+        setFirebaseError(errorMsg);
+        alert(`Error creating book: ${errorMsg}`);
+      }
     }
   };
 
@@ -816,6 +834,29 @@ function AppContent() {
               exit="hidden"
               className="flex-1 p-12 overflow-y-auto no-scrollbar font-sans relative"
             >
+              {/* Firebase Error Banner */}
+              {firebaseError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="mb-8 px-6 py-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-4"
+                >
+                  <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-amber-300 font-medium text-sm">Setup Required</p>
+                    <p className="text-amber-200/80 text-xs mt-1">{firebaseError}</p>
+                    <p className="text-amber-200/60 text-xs mt-2">Please configure Firebase Firestore to use templates and create books.</p>
+                  </div>
+                  <button
+                    onClick={() => setFirebaseError(null)}
+                    className="text-amber-500 hover:text-amber-400 transition-colors shrink-0"
+                  >
+                    ✕
+                  </button>
+                </motion.div>
+              )}
+
               {/* Hero Section */}
               <header className="flex flex-col mb-16 px-4">
                 {!user ? (
