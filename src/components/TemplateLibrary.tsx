@@ -310,40 +310,41 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
       <div className="flex-1 overflow-y-auto no-scrollbar space-y-3">
         <AnimatePresence mode="popLayout">
           {filteredTemplates.map((template) => (
-            <motion.div
+            <motion.button
               key={template.id}
               layout
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full flex items-center justify-between p-4 glass rounded-2xl border-white/5 text-left group transition-all hover:bg-white/[0.03]"
+              onClick={() => onApplyTemplate(template.layout)}
+              className="w-full flex items-center justify-between p-4 glass rounded-2xl border border-white/5 text-left group transition-all hover:bg-white/[0.08] hover:border-white/20 active:scale-95"
             >
-              <button
-                onClick={() => onApplyTemplate(template.layout)}
-                className="flex-1 flex items-center gap-4 text-left cursor-pointer"
-              >
+              <div className="flex items-center gap-4 text-left flex-1 min-w-0">
                 <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-indigo-500/10 group-hover:text-indigo-400 transition-colors shrink-0 text-zinc-400">
                   {template.isCustom ? <LayoutIcon className="w-5 h-5" /> : <template.icon className="w-5 h-5" />}
                 </div>
-                <div className="overflow-hidden">
+                <div className="overflow-hidden flex-1">
                   <div className="text-xs font-bold text-zinc-200 mb-0.5 truncate">{template.name}</div>
                   <div className="text-[9px] text-zinc-500 uppercase tracking-widest flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/50" />
                     {template.isCustom ? 'Custom Style' : 'Spread Preset'}
                   </div>
                 </div>
-              </button>
+              </div>
 
               {template.isCustom && (
                 <button
-                  onClick={() => onDeleteTemplate?.(template.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteTemplate?.(template.id);
+                  }}
                   className="p-2 hover:bg-red-500/10 rounded-xl text-zinc-500 hover:text-red-400 transition-colors shrink-0 ml-2 cursor-pointer"
                   title="Delete Custom Style"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
               )}
-            </motion.div>
+            </motion.button>
           ))}
           {activeCat === 'custom' && filteredTemplates.length === 0 && (
             <div className="py-8 text-center text-zinc-600 text-xs italic">

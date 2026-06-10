@@ -617,6 +617,46 @@ function AppContent() {
     window.dispatchEvent(new CustomEvent('apply-template', { detail: layout }));
   };
 
+  const createProjectWithTemplate = async (templateLayout: any) => {
+    if (!user) {
+      alert("Please login first");
+      return;
+    }
+    const name = prompt("Enter your book name:");
+    if (!name) return;
+
+    try {
+      const projectData = {
+        name,
+        description: "",
+        ownerId: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, 'projects'), projectData);
+
+      // Create first page with template layout
+      const canvasData = {
+        version: "6.0.0",
+        ...templateLayout
+      };
+
+      const firstPage = {
+        projectId: docRef.id,
+        pageNumber: 1,
+        type: 'spread',
+        canvasData
+      };
+
+      await addDoc(collection(db, `projects/${docRef.id}/pages`), firstPage);
+
+      openProject({ id: docRef.id, ...projectData } as Project);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.CREATE, 'projects');
+    }
+  };
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { 
@@ -843,11 +883,26 @@ function AppContent() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   {[
-                    { title: "The Minimalist", desc: "Swiss-inspired layouts with generous negative space.", color: "from-zinc-200 to-zinc-400", category: 'minimalist' },
-                    { title: "Cinematic Editorial", desc: "Bold, full-bleed imagery with premium typography.", color: "from-indigo-400 to-purple-500", category: 'cinematic' },
-                    { title: "Classic Vintage", desc: "Warm tones and sophisticated antique framing.", color: "from-amber-200 to-orange-400", category: 'editorial' }
-                  ].map((tpl, i) => (
-                    <motion.div 
+                    {
+                      title: "The Minimalist",
+                      desc: "Swiss-inspired layouts with generous negative space.",
+                      color: "from-zinc-200 to-zinc-400",
+                      layout: { objects: [{ type: 'rect', left: 400, top: 150, width: 800, height: 350, fill: 'rgba(0,0,0,0.05)', isPlaceholder: true, stroke: '#e4e4e7' }] }
+                    },
+                    {
+                      title: "Cinematic Editorial",
+                      desc: "Bold, full-bleed imagery with premium typography.",
+                      color: "from-indigo-400 to-purple-500",
+                      layout: { objects: [{ type: 'rect', left: 0, top: 0, width: 1584, height: 612, fill: 'rgba(0,0,0,0.05)', stroke: '#e4e4e7', isPlaceholder: true }, { type: 'i-text', left: 100, top: 250, text: 'CINEMATIC JOURNEY', fontFamily: 'Playfair Display', fontSize: 60, fill: '#18181b', fontWeight: 'bold' }] }
+                    },
+                    {
+                      title: "Classic Vintage",
+                      desc: "Warm tones and sophisticated antique framing.",
+                      color: "from-amber-200 to-orange-400",
+                      layout: { objects: [{ type: 'i-text', left: 100, top: 80, text: 'VINTAGE', fontFamily: 'Playfair Display', fontSize: 120, fontWeight: 'bold', fill: '#000', opacity: 0.1 }, { type: 'rect', left: 792, top: 50, width: 792, height: 550, fill: 'rgba(0,0,0,0.05)', isPlaceholder: true, stroke: '#e4e4e7' }] }
+                    }
+                  ].map((tpl) => (
+                    <motion.div
                       key={tpl.title}
                       variants={itemVariants}
                       whileHover={{ y: -10 }}
@@ -862,14 +917,13 @@ function AppContent() {
                       <div className="px-6 pb-6 pt-2">
                         <h3 className="text-xl font-medium text-white mb-2">{tpl.title}</h3>
                         <p className="text-sm text-zinc-500 mb-6">{tpl.desc}</p>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
+                        <button
+                          onClick={() => {
                             if (!user) {
                               alert('Please sign in first to create a book.');
                               return;
                             }
-                            createProject();
+                            createProjectWithTemplate(tpl.layout);
                           }}
                           className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-300 group-hover:text-white transition-all cursor-pointer"
                         >Use Template</button>
